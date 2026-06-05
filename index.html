@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Пиратские Алгоритмы 🏴‍☠️</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- 3D холст -->
+  <canvas id="renderCanvas" touch-action="none"></canvas>
+
+  <!-- Экран загрузки -->
+  <div id="loader" class="loader hidden">
+    <div class="spinner"></div>
+    <div id="loaderText">Загрузка...</div>
+  </div>
+
+  <!-- Стартовый экран: выбор персонажа -->
+  <div id="startScreen" class="overlay">
+    <div class="start-card">
+      <h1>🏴‍☠️ Пиратские Алгоритмы</h1>
+      <p class="subtitle">Собери команды, обойди пиратов и добеги до финиша!</p>
+      <h2>Выбери героя</h2>
+      <div class="hero-choices">
+        <button class="hero-choice" data-hero="boy">
+          <img src="assets/models/boy.png" class="hero-img" alt="Мишаня" />
+          <div class="hero-name">Мишаня</div>
+        </button>
+        <button class="hero-choice" data-hero="girl">
+          <img src="assets/models/girl.png" class="hero-img" alt="Алина" />
+          <div class="hero-name">Алина</div>
+        </button>
+      </div>
+      <button id="startBtn" class="btn btn-big" disabled>В путь! ⛵</button>
+    </div>
+  </div>
+
+  <!-- Игровой интерфейс (HUD) -->
+  <div id="hud" class="hud hidden">
+    <div class="hud-top">
+      <div class="hud-left">
+        <span class="badge" id="levelBadge">Уровень 1</span>
+        <span class="badge" id="levelName"></span>
+      </div>
+      <div class="hud-right">
+        <span class="badge coins">🪙 <span id="coinCount">0</span>/<span id="coinTotal">0</span></span>
+        <span class="badge">👣 <span id="stepCount">0</span></span>
+      </div>
+    </div>
+    <div id="message" class="message"></div>
+  </div>
+
+  <!-- Панель программирования -->
+  <div id="programPanel" class="program-panel hidden">
+    <div class="program-row">
+      <div class="palette">
+        <button class="cmd-btn" data-cmd="forward" title="Шаг вперёд">⬆️<span>Шаг</span></button>
+        <button class="cmd-btn" data-cmd="right" title="Повернуть на 90°">🔄<span>Повернуть</span></button>
+      </div>
+      <div class="program-list-wrap">
+        <div id="programList" class="program-list">
+          <span class="program-hint">Нажимай на команды слева, чтобы собрать алгоритм →</span>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <button id="runBtn" class="btn btn-run">▶️ Запустить</button>
+      <button id="stepBackBtn" class="btn btn-secondary">⌫ Удалить</button>
+      <button id="clearBtn" class="btn btn-secondary">🗑 Очистить</button>
+      <button id="resetBtn" class="btn btn-secondary">🔄 Сброс</button>
+    </div>
+  </div>
+
+  <!-- Модальное окно результата -->
+  <div id="resultModal" class="overlay hidden">
+    <div class="start-card">
+      <h1 id="resultTitle">🎉</h1>
+      <p id="resultText" class="subtitle"></p>
+      <div id="resultStars" class="stars"></div>
+      <div class="controls" style="justify-content:center">
+        <button id="retryBtn" class="btn btn-secondary">🔄 Заново</button>
+        <button id="nextBtn" class="btn btn-run">Дальше ➡️</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Babylon.js -->
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+
+  <!-- Игра -->
+  <script src="js/levels.js"></script>
+  <script src="js/game.js?v=12"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>

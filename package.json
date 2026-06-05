@@ -1,0 +1,8 @@
+{
+  "name": "pirate-algorithms",
+  "version": "1.0.0",
+  "description": "Браузерная 3D-игра для обучения детей алгоритмам (Babylon.js)",
+  "scripts": {
+    "start": "npx --yes serve -l 5173 ."
+  }
+}

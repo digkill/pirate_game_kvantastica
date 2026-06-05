@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e ' *)",
+      "Bash(node --check js/game.js)",
+      "Bash(node --check js/levels.js)",
+      "Bash(node --check js/ui.js)"
+    ]
+  }
+}

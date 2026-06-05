@@ -1,0 +1,189 @@
+:root {
+  --sea: #1f6f8b;
+  --sand: #e6c98f;
+  --gold: #ffcf3f;
+  --wood: #6b4423;
+  --wood-light: #8a5a2b;
+  --accent: #ff7a45;
+  --ok: #43c06d;
+  --danger: #e74c3c;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  font-family: "Baloo 2", "Comic Sans MS", "Segoe UI", system-ui, sans-serif;
+  background: #0b3a4a;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#renderCanvas {
+  width: 100%; height: 100%;
+  display: block;
+  touch-action: none;
+  outline: none;
+}
+
+.hidden { display: none !important; }
+
+/* ---------- Загрузка ---------- */
+.loader {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 18px;
+  background: radial-gradient(circle at 50% 30%, #2a6f8a, #0b3a4a);
+  color: #fff; z-index: 100;
+  font-size: 20px;
+}
+.spinner {
+  width: 64px; height: 64px;
+  border: 8px solid rgba(255,255,255,.2);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- Оверлеи ---------- */
+.overlay {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 30%, rgba(42,111,138,.96), rgba(11,58,74,.98));
+  padding: 20px;
+}
+.start-card {
+  background: linear-gradient(180deg, #fff7e6, #ffe9c4);
+  border: 6px solid var(--wood);
+  border-radius: 28px;
+  padding: 28px 32px;
+  max-width: 520px; width: 100%;
+  text-align: center;
+  box-shadow: 0 18px 50px rgba(0,0,0,.45);
+}
+.start-card h1 { font-size: 34px; color: var(--wood); margin-bottom: 6px; }
+.start-card h2 { font-size: 22px; color: var(--wood-light); margin: 18px 0 10px; }
+.subtitle { color: #6b4423; font-size: 17px; opacity: .9; }
+
+.hero-choices { display: flex; gap: 18px; justify-content: center; margin: 8px 0 18px; }
+.hero-choice {
+  flex: 1; max-width: 180px;
+  background: #fff; border: 4px solid transparent;
+  border-radius: 20px; padding: 18px 10px;
+  cursor: pointer; transition: transform .12s, border-color .12s, box-shadow .12s;
+}
+.hero-choice:hover { transform: translateY(-4px); }
+.hero-choice.selected {
+  border-color: var(--accent);
+  box-shadow: 0 8px 22px rgba(255,122,69,.4);
+}
+.hero-img {
+  width: 120px; height: 120px;
+  object-fit: contain;
+  border-radius: 12px;
+  pointer-events: none;
+}
+.hero-name { font-size: 22px; font-weight: 700; color: var(--wood); margin-top: 8px; }
+
+/* ---------- Кнопки ---------- */
+.btn {
+  border: none; border-radius: 16px;
+  padding: 12px 20px; font-size: 18px; font-weight: 700;
+  cursor: pointer; color: #fff;
+  background: var(--wood-light);
+  transition: transform .1s, filter .1s;
+  font-family: inherit;
+}
+.btn:hover { filter: brightness(1.08); }
+.btn:active { transform: scale(.96); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-big { font-size: 24px; padding: 16px 40px; background: var(--accent); }
+.btn-run { background: var(--ok); }
+.btn-secondary { background: #b5895a; }
+
+/* ---------- HUD ---------- */
+.hud {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+  pointer-events: none; padding: 12px;
+}
+.hud-top { display: flex; justify-content: space-between; }
+.hud-left, .hud-right { display: flex; gap: 8px; flex-wrap: wrap; }
+.badge {
+  background: rgba(11,58,74,.85);
+  color: #fff; padding: 6px 14px; border-radius: 14px;
+  font-size: 16px; font-weight: 700;
+  border: 2px solid rgba(255,255,255,.25);
+}
+.badge.coins { background: rgba(180,120,20,.9); }
+.message {
+  margin: 10px auto 0; max-width: 480px; text-align: center;
+  background: rgba(255,122,69,.95); color: #fff;
+  padding: 10px 18px; border-radius: 14px;
+  font-size: 18px; font-weight: 700;
+  opacity: 0; transform: translateY(-8px);
+  transition: opacity .2s, transform .2s;
+}
+.message.show { opacity: 1; transform: translateY(0); }
+.message.ok { background: rgba(67,192,109,.95); }
+.message.bad { background: rgba(231,76,60,.95); }
+
+/* ---------- Панель программы ---------- */
+.program-panel {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+  background: linear-gradient(180deg, rgba(107,68,35,.96), rgba(74,46,22,.98));
+  border-top: 5px solid var(--gold);
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+}
+.program-row { display: flex; gap: 12px; align-items: stretch; }
+.palette { display: flex; gap: 8px; }
+.cmd-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; width: 74px; height: 74px;
+  border: none; border-radius: 16px;
+  background: var(--gold); color: var(--wood);
+  font-size: 28px; font-weight: 800; cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 4px 0 #c79a26;
+  transition: transform .08s;
+}
+.cmd-btn span { font-size: 12px; }
+.cmd-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #c79a26; }
+
+.program-list-wrap {
+  flex: 1; overflow-x: auto;
+  background: rgba(0,0,0,.25); border-radius: 14px; padding: 8px;
+}
+.program-list {
+  display: flex; gap: 6px; align-items: center;
+  min-height: 58px; flex-wrap: wrap;
+}
+.program-hint { color: rgba(255,255,255,.6); font-size: 14px; padding: 0 8px; }
+.cmd-chip {
+  width: 46px; height: 46px; border-radius: 12px;
+  background: #fff; color: var(--wood);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; position: relative;
+  box-shadow: 0 2px 4px rgba(0,0,0,.3);
+}
+.cmd-chip .idx {
+  position: absolute; top: -6px; left: -6px;
+  background: var(--accent); color: #fff;
+  width: 18px; height: 18px; border-radius: 50%;
+  font-size: 11px; display: flex; align-items: center; justify-content: center;
+}
+.cmd-chip.active { outline: 4px solid var(--ok); transform: scale(1.12); }
+
+.controls { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.controls .btn { flex: 1; min-width: 110px; padding: 12px; font-size: 16px; }
+
+/* ---------- Звёзды результата ---------- */
+.stars { font-size: 48px; margin: 14px 0; letter-spacing: 6px; }
+
+@media (max-width: 560px) {
+  .cmd-btn { width: 60px; height: 60px; font-size: 22px; }
+  .start-card h1 { font-size: 26px; }
+  .hero-emoji { font-size: 48px; }
+}
