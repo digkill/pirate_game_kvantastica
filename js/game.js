@@ -18,8 +18,10 @@ const GRID_ROTATION_STEPS = 1;
 // Сдвиг игровой сетки по Y относительно y=0 (основания карты)
 const GRID_Y_OFFSET = 9.5;
 // Смещение всего поля в мировых координатах (вправо = +X, вперёд = +Z)
-const GRID_OFFSET_X = 3;
-const GRID_OFFSET_Z = 0;
+const GRID_OFFSET_X = -3;
+const GRID_OFFSET_Z = 20;
+const MAP_FILE = "game_pirate_adventure_map.glb?v=2";
+const MAP_YAW_OFFSET = 0;
 // Поправка разворота модели. Если герой бежит "боком" — поставь
 // Math.PI/2, -Math.PI/2 или Math.PI, пока не встанет лицом по ходу.
 const HERO_YAW_OFFSET = 0;
@@ -125,7 +127,7 @@ class Game {
   //  Загрузка карты
   // ---------------------------------------------------------
   async loadMap(onProgress) {
-    const res = await BABYLON.SceneLoader.ImportMeshAsync("", ASSET_DIR, "game_pirate_adventure_map.glb", this.scene, onProgress);
+    const res = await BABYLON.SceneLoader.ImportMeshAsync("", ASSET_DIR, MAP_FILE, this.scene, onProgress);
     const root = res.meshes[0];
     root.computeWorldMatrix(true);
 
@@ -153,7 +155,11 @@ class Game {
     this.gridY = 0 + GRID_Y_OFFSET;
     this._mapSizeX = b.max.x - b.min.x;
     this._mapSizeZ = b.max.z - b.min.z;
-    this.mapRoot = root;
+
+    const mapPivot = new BABYLON.TransformNode("mapYawPivot", this.scene);
+    root.parent = mapPivot;
+    this.mapContentRoot = root;
+    this.mapRoot = mapPivot;
   }
 
   async loadSkybox() {
@@ -279,7 +285,8 @@ class Game {
       // нечётный шаг поворота сетки меняет ориентацию её длинной оси
       const gridLongIsX = (GRID_ROTATION_STEPS % 2 === 0) ? gridLongIsXOrig : !gridLongIsXOrig;
       const mapLongIsX = (this._mapSizeX || 1) >= (this._mapSizeZ || 1);
-      this.mapRoot.rotation.y = (gridLongIsX === mapLongIsX) ? Math.PI : Math.PI * 1.5;
+      this.mapRoot.rotationQuaternion = null;
+      this.mapRoot.rotation.y = ((gridLongIsX === mapLongIsX) ? Math.PI : Math.PI * 1.5) + MAP_YAW_OFFSET;
     }
 
     this._buildTiles();
