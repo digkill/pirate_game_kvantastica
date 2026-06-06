@@ -118,6 +118,11 @@ html, body {
   border: 2px solid rgba(255,255,255,.25);
 }
 .badge.coins { background: rgba(180,120,20,.9); }
+.badge.dir {
+  background: rgba(20,80,160,.9);
+  font-size: 18px; min-width: 90px; text-align: center;
+  letter-spacing: 1px;
+}
 .message {
   margin: 10px auto 0; max-width: 480px; text-align: center;
   background: rgba(255,122,69,.95); color: #fff;

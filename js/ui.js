@@ -2,7 +2,9 @@
  *  UI — связывает DOM с игровым движком
  * ============================================================ */
 
-const CMD_ICON = { forward: "⬆️", right: "🔄" };
+const CMD_ICON = { forward: "⬆️", right: "🔄", jump: "🦘" };
+
+const DIR_LABEL = { N: "↑ Север", E: "→ Восток", S: "↓ Юг", W: "← Запад" };
 
 const $ = (id) => document.getElementById(id);
 
@@ -10,6 +12,37 @@ let game = null;
 let heroKey = null;
 let levelIndex = 0;
 let program = [];
+
+// ---------- Прогресс ----------
+const SAVE_KEY = "pirateAlgorithmsProgress";
+
+function saveProgress(stars) {
+  try {
+    const saved = loadProgressData();
+    if (stars !== undefined) {
+      saved.stars[levelIndex] = Math.max(saved.stars[levelIndex] || 0, stars);
+    }
+    saved.level = Math.max(saved.level || 0, levelIndex);
+    saved.hero = heroKey;
+    localStorage.setItem(SAVE_KEY, JSON.stringify(saved));
+  } catch (_) {}
+}
+
+function loadProgressData() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (!Array.isArray(d.stars)) d.stars = [];
+      return d;
+    }
+  } catch (_) {}
+  return { level: 0, hero: null, stars: [] };
+}
+
+function clearProgress() {
+  try { localStorage.removeItem(SAVE_KEY); } catch (_) {}
+}
 
 // ---------- Сообщения ----------
 let msgTimer = null;
@@ -69,7 +102,7 @@ async function startLevel(index) {
   renderProgram();
   highlightStep(-1);
   game.buildLevel(level);
-  showMessage("Составь алгоритм и нажми «Запустить» ▶️");
+  showMessage(level.hint || "Составь алгоритм и нажми «Запустить» ▶️");
 }
 
 // ---------- Результат ----------
@@ -81,6 +114,8 @@ function showResult(result) {
     if (result.coins >= result.total) stars = 3;
     if (result.total === 0) stars = 3;
 
+    saveProgress(stars);
+
     $("resultTitle").textContent = "🎉 Победа!";
     $("resultText").textContent =
       `Ты довёл героя до финиша! Монет собрано: ${result.coins} из ${result.total}.`;
@@ -89,13 +124,30 @@ function showResult(result) {
     $("nextBtn").textContent = levelIndex < LEVELS.length - 1 ? "Дальше ➡️" : "🏆 Финал!";
     $("resultModal").classList.remove("hidden");
   } else {
-    // Не победа — показываем подсказку прямо в игре, без модалки
     showMessage(result.reason, "bad");
   }
 }
 
 // ---------- Инициализация ----------
 function bindUI() {
+  // Показать кнопку "Продолжить" если есть сохранение
+  const saved = loadProgressData();
+  if (saved && saved.level > 0) {
+    const lvName = LEVELS[saved.level] ? LEVELS[saved.level].name : "";
+    $("continueBtn").textContent = `⏩ Продолжить — Уровень ${saved.level + 1}${lvName ? ": " + lvName : ""}`;
+    $("continueWrap").style.display = "block";
+    $("continueBtn").addEventListener("click", () => {
+      // Восстанавливаем героя из сохранения или берём первого выбранного
+      if (!heroKey) {
+        heroKey = saved.hero || "boy";
+        document.querySelectorAll(".hero-choice").forEach(b => {
+          b.classList.toggle("selected", b.dataset.hero === heroKey);
+        });
+      }
+      beginGame(saved.level);
+    });
+  }
+
   // Выбор героя
   document.querySelectorAll(".hero-choice").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -107,7 +159,7 @@ function bindUI() {
   });
 
   // Старт игры
-  $("startBtn").addEventListener("click", beginGame);
+  $("startBtn").addEventListener("click", () => beginGame(0));
 
   // Палитра команд
   document.querySelectorAll(".cmd-btn").forEach(btn => {
@@ -190,7 +242,7 @@ function bindRetryDefault() {
   };
 }
 
-async function beginGame() {
+async function beginGame(startLevelIndex = 0) {
   $("startScreen").classList.add("hidden");
   $("loader").classList.remove("hidden");
   $("loaderText").textContent = "Загружаю остров...";
@@ -204,7 +256,11 @@ async function beginGame() {
     $("coinCount").textContent = c;
     $("coinTotal").textContent = t;
   };
-  game.onComplete = (res) => showResult(res);
+  game.onComplete  = (res) => showResult(res);
+  game.onDirChange = (dir) => {
+    const el = $("dirBadge");
+    if (el) el.textContent = DIR_LABEL[dir] || dir;
+  };
 
   try {
     // Грузим всё параллельно — так заметно быстрее.
@@ -236,7 +292,7 @@ async function beginGame() {
   $("hud").classList.remove("hidden");
   $("programPanel").classList.remove("hidden");
 
-  await startLevel(0);
+  await startLevel(Math.min(startLevelIndex, LEVELS.length - 1));
 }
 
 document.addEventListener("DOMContentLoaded", bindUI);

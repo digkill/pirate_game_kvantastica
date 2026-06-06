@@ -33,6 +33,9 @@
         </button>
       </div>
       <button id="startBtn" class="btn btn-big" disabled>В путь! ⛵</button>
+      <div id="continueWrap" style="margin-top:12px;display:none">
+        <button id="continueBtn" class="btn btn-secondary" style="width:100%">⏩ Продолжить</button>
+      </div>
     </div>
   </div>
 
@@ -44,6 +47,7 @@
         <span class="badge" id="levelName"></span>
       </div>
       <div class="hud-right">
+        <span class="badge dir" id="dirBadge">→</span>
         <span class="badge coins">🪙 <span id="coinCount">0</span>/<span id="coinTotal">0</span></span>
         <span class="badge">👣 <span id="stepCount">0</span></span>
       </div>
@@ -56,7 +60,8 @@
     <div class="program-row">
       <div class="palette">
         <button class="cmd-btn" data-cmd="forward" title="Шаг вперёд">⬆️<span>Шаг</span></button>
-        <button class="cmd-btn" data-cmd="right" title="Повернуть на 90°">🔄<span>Повернуть</span></button>
+        <button class="cmd-btn" data-cmd="right"   title="Повернуть на 90° вправо">🔄<span>Повернуть</span></button>
+        <button class="cmd-btn" data-cmd="jump"    title="Прыжок через препятствие">🦘<span>Прыжок</span></button>
       </div>
       <div class="program-list-wrap">
         <div id="programList" class="program-list">
@@ -91,7 +96,7 @@
 
   <!-- Игра -->
   <script src="js/levels.js"></script>
-  <script src="js/game.js?v=12"></script>
+  <script src="js/game.js?v=17"></script>
   <script src="js/ui.js"></script>
 </body>
 </html>

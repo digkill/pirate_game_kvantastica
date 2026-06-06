@@ -11,6 +11,8 @@ const HERO_HEIGHT = 1.8;   // желаемая высота героя в мир
 const MOVE_MS = 480;       // длительность шага вперёд
 const TURN_MS = 320;       // длительность поворота
 const BUMP_MS = 320;       // длительность "удара о стену"
+const WIN_TURN_MS = 420;   // разворот к игроку перед победной анимацией
+const WIN_YAW_OFFSET = Math.PI / 2;
 // Поворот игровой сетки: 0=нет, 1=90° влево (CCW), 2=180°, 3=90° вправо
 const GRID_ROTATION_STEPS = 1;
 // Сдвиг игровой сетки по Y относительно y=0 (основания карты)
@@ -26,6 +28,32 @@ const CAMERA_ALPHA_OFFSET = Math.PI;
 const CAMERA_BETA = 1.18;
 const CAMERA_DISTANCE = 9;
 const CAMERA_FOLLOW_LERP = 0.12;
+
+// Доступные анимации boy.glb:
+// "Collect_Object", "Idle_11", "Jump_with_Arms_Open", "Running", "Walking", "happy_jump_m"
+//
+// Доступные анимации girl.glb:
+// "Female_Crouch_Pick_Throw_Forward", "Female_Walk_Pick_Put_In_Pocket", "Idle_6",
+// "Jump_Rope", "Jump_with_Arms_Open", "Male_Bend_Over_Pick_Up", "Running",
+// "Shake_It_Off_Dance", "Walking_Woman", "Walking", "Wave_for_Help_1", "run_fast_5"
+const HERO_ANIMATIONS = {
+  boy: {
+    idle: "Jump_with_Arms_Open",
+    walk: "happy_jump_m",
+    win: "Collect_Object",
+    winFallback: "happy_jump_m",
+    jump: "Running",
+    jumpFallback: "Running",
+  },
+  girl: {
+    idle: "Jump_Rope",
+    walk: "Walking_Woman",
+    win: "Female_Crouch_Pick_Throw_Forward",
+    winFallback: "Female_Crouch_Pick_Throw_Forward",
+    jump: "Jump_with_Arms_Open",
+    jumpFallback: "Running",
+  },
+};
 
 // Направления (по часовой стрелке): N -> E -> S -> W
 const DIR_ORDER = ["N", "E", "S", "W"];
@@ -48,10 +76,11 @@ class Game {
     this.scene.clearColor = new BABYLON.Color4(0.12, 0.45, 0.55, 1);
 
     // Колбэки для UI (назначаются снаружи)
-    this.onStatus = null;   // (text, type)
-    this.onCoin = null;     // (collected, total)
-    this.onStep = null;     // (index | -1)
-    this.onComplete = null; // (result)
+    this.onStatus    = null; // (text, type)
+    this.onCoin      = null; // (collected, total)
+    this.onStep      = null; // (index | -1)
+    this.onComplete  = null; // (result)
+    this.onDirChange = null; // (dirString "N"|"E"|"S"|"W")
 
     this.program = [];
     this.running = false;
@@ -201,11 +230,12 @@ class Game {
     const groups = res.animationGroups || [];
     groups.forEach(g => g.stop());
     const byName = (name) => groups.find(g => g.name === name) || null;
-    const isGirl = heroKey === "girl";
+    const animMap = HERO_ANIMATIONS[heroKey] || HERO_ANIMATIONS.boy;
 
-    this.animWalk = byName("Running");
-    this.animIdle = byName(isGirl ? "Idle_6" : "Idle_11");
-    this.animWin  = byName(isGirl ? "Jump_Rope" : "happy_jump_m");
+    this.animWalk = byName(animMap.walk);
+    this.animIdle = byName(animMap.idle);
+    this.animWin = byName(animMap.win) || byName(animMap.winFallback);
+    this.animJump = byName(animMap.jump) || byName(animMap.jumpFallback);
     this._currentAnim = null;
     this._playAnim(this.animIdle);
   }
@@ -254,6 +284,7 @@ class Game {
 
     this._buildTiles();
     this._buildEntities();
+    this._buildLabels();
     this._buildSpinObserver();
 
     // Камера на стартовую позицию игрока, поближе
@@ -302,28 +333,66 @@ class Game {
     }
   }
 
+  _buildLabels() {
+    const ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const yPos  = this.gridY + 0.12;
+    const sz    = CELL * 0.75;
+
+    const makeLabel = (text, row, col, color) => {
+      const pos = this.cellToWorld(row, col, yPos);
+      const plane = BABYLON.MeshBuilder.CreatePlane("lbl_" + text, { size: sz }, this.scene);
+      plane.rotation.x = Math.PI / 2;   // лежит плашмя на поле
+      plane.position   = pos;
+      plane.isPickable = false;
+
+      const tex = new BABYLON.DynamicTexture("lbl_t_" + text, { width: 128, height: 128 }, this.scene);
+      tex.hasAlpha = true;
+      const ctx = tex.getContext();
+      ctx.clearRect(0, 0, 128, 128);
+      tex.drawText(text, null, 88, "bold 72px Arial", color, "transparent", true);
+
+      const mat = new BABYLON.StandardMaterial("lbl_m_" + text, this.scene);
+      mat.diffuseTexture  = tex;
+      mat.emissiveColor   = BABYLON.Color3.White();
+      mat.backFaceCulling = false;
+      mat.useAlphaFromDiffuseTexture = true;
+      plane.material = mat;
+      this.tiles.push(plane);
+    };
+
+    // Цифры по столбцам — над первым рядом
+    for (let c = 0; c < this.cols; c++) {
+      makeLabel(String(c + 1), -0.75, c, "#ffe066");
+    }
+    // Буквы по рядам — слева от первого столбца (A сверху → reversed index)
+    for (let r = 0; r < this.rows; r++) {
+      const ri = this.rows - 1 - r;
+      makeLabel(ALPHA[ri] || String(ri + 1), r, -0.75, "#66d4ff");
+    }
+  }
+
   _buildEntities() {
     let pirateIdx = 0;
 
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         const ch = this.grid[r][c] || ".";
+
         if (ch === "#") {
+          // Проверяем что клетка внутри сетки (защита от опечаток в уровне)
+          if (r < 0 || r >= this.rows || c < 0 || c >= this.cols) continue;
           const templates = this.pirateTemplates;
           if (templates && templates.length) {
             const tpl = templates[pirateIdx % templates.length];
             pirateIdx++;
-            // instantiateHierarchy корректно копирует весь GLB-граф с дочерними мешами
             const inst = tpl.instantiateHierarchy(null, { newNamePrefix: "p" + r + "_" + c + "_" });
             inst.setEnabled(true);
-            // GLB-иерархии используют quaternion — обнуляем, чтобы работали Euler-углы
             inst.rotationQuaternion = null;
             inst.position = this.cellToWorld(r, c, this.gridY - tpl._feetMinY);
             inst.rotation.y = Math.random() * Math.PI * 2;
             inst.metadata = { phase: Math.random() * Math.PI * 2, baseY: inst.position.y };
             this.pirates.push(inst);
           } else {
-            // запасной куб если модели не загрузились
             const pirateMat = new BABYLON.StandardMaterial("pirateCube", this.scene);
             pirateMat.diffuseColor = new BABYLON.Color3(0.75, 0.18, 0.16);
             const box = BABYLON.MeshBuilder.CreateBox("pirate", { size: CELL * 0.66 }, this.scene);
@@ -331,6 +400,8 @@ class Game {
             box.material = pirateMat;
             this.pirates.push(box);
           }
+        } else if (ch === "L") {
+          this._buildLavaTile(r, c);
         } else if (ch === "C") {
           this._addCollectible(r, c, "coin", 1);
         } else if (ch === "B") {
@@ -341,6 +412,20 @@ class Game {
 
     if (this.start) this._buildStartMarker(this.start);
     if (this.finish) this._buildFinishMarker(this.finish);
+  }
+
+  _buildLavaTile(row, col) {
+    const lava = BABYLON.MeshBuilder.CreateBox("lava", {
+      width: CELL * 0.99, depth: CELL_LONG * 0.99, height: 0.2,
+    }, this.scene);
+    lava.position = this.cellToWorld(row, col, this.gridY - 0.06);
+    const mat = new BABYLON.StandardMaterial("lavaMat_" + row + col, this.scene);
+    mat.diffuseColor  = new BABYLON.Color3(1.0, 0.25, 0.0);
+    mat.emissiveColor = new BABYLON.Color3(0.7, 0.15, 0.0);
+    lava.material = mat;
+    // анимация пульсации в спин-обсервере через metadata
+    lava.metadata = { kind: "lava", phase: Math.random() * Math.PI * 2 };
+    this.tiles.push(lava);
   }
 
   _addCollectible(row, col, type, value) {
@@ -425,6 +510,14 @@ class Game {
         p.rotation.x = Math.sin(t * 0.9 + ph + 1.2) * 0.10;
         p.position.y = p.metadata.baseY + Math.sin(t * 1.1 + ph) * 0.06;
       });
+
+      // Пульсация лавы
+      this.tiles.forEach(tile => {
+        if (!tile.metadata || tile.metadata.kind !== "lava") return;
+        const ph = tile.metadata.phase;
+        const pulse = 0.5 + 0.5 * Math.sin(t * 3.0 + ph);
+        tile.material.emissiveColor = new BABYLON.Color3(0.5 + 0.5 * pulse, 0.08 + 0.12 * pulse, 0.0);
+      });
     });
   }
 
@@ -452,8 +545,10 @@ class Game {
     const w = this.cellToWorld(s.row, s.col, this.gridY - this.heroFeetMinY);
     this.hero.position.copyFrom(w);
     this.hero.rotation.y = this._dirAngle(this.dir);
+    this._lockCameraAlpha = false;
     this._updateCameraFollow(true);
     this._playAnim(this.animIdle);
+    if (this.onDirChange) this.onDirChange(DIR_ORDER[this.dir]);
   }
 
   _dirAngle(dirIdx) {
@@ -469,11 +564,13 @@ class Game {
     const currentTarget = this.camera.target || target;
     this.camera.target = BABYLON.Vector3.Lerp(currentTarget, target, lerp);
 
-    const toAlpha = this.hero.rotation.y + CAMERA_ALPHA_OFFSET;
-    let delta = toAlpha - this.camera.alpha;
-    while (delta > Math.PI) delta -= Math.PI * 2;
-    while (delta < -Math.PI) delta += Math.PI * 2;
-    this.camera.alpha += delta * lerp;
+    if (!this._lockCameraAlpha) {
+      const toAlpha = this.hero.rotation.y + CAMERA_ALPHA_OFFSET;
+      let delta = toAlpha - this.camera.alpha;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      this.camera.alpha += delta * lerp;
+    }
     this.camera.beta += (CAMERA_BETA - this.camera.beta) * lerp;
     this.camera.radius += (CAMERA_DISTANCE - this.camera.radius) * lerp;
   }
@@ -514,6 +611,20 @@ class Game {
 
       if (cmd === "left" || cmd === "right") {
         await this._turn(cmd);
+      } else if (cmd === "jump") {
+        const jumped = await this._jump();
+        if (this.aborted) { this.running = false; return null; }
+        if (!jumped.ok) {
+          result.reason = jumped.reason;
+          this.running = false;
+          if (this.onStep) this.onStep(-1);
+          if (this.onComplete) this.onComplete(result);
+          return result;
+        }
+        if (jumped.win) {
+          await this._completeWin(result);
+          return result;
+        }
       } else if (cmd === "forward") {
         const moved = await this._forward();
         if (this.aborted) { this.running = false; return null; }
@@ -525,14 +636,7 @@ class Game {
           return result;
         }
         if (moved.win) {
-          result.win = true;
-          result.coins = this.coinCount;
-          this.running = false;
-          if (this.onStep) this.onStep(-1);
-          this._playAnim(this.animWin);
-          // даём победной анимации поиграть 1.8 с перед модалкой
-          await new Promise(r => setTimeout(r, 1800));
-          if (this.onComplete) this.onComplete(result);
+          await this._completeWin(result);
           return result;
         }
       }
@@ -544,6 +648,39 @@ class Game {
     if (!result.win) result.reason = "Алгоритм закончился, а финиш не достигнут. Попробуй ещё!";
     if (this.onComplete) this.onComplete(result);
     return result;
+  }
+
+  async _completeWin(result) {
+    result.win = true;
+    result.coins = this.coinCount;
+    this.running = false;
+    if (this.onStep) this.onStep(-1);
+
+    this._lockCameraAlpha = true;
+    await this._faceHeroToCamera();
+    this._playAnim(this.animWin);
+    await new Promise(r => setTimeout(r, 1800));
+
+    if (this.onComplete) this.onComplete(result);
+  }
+
+  async _faceHeroToCamera() {
+    if (!this.hero || !this.camera) return;
+
+    const camPos = this.camera.position;
+    const toCamera = camPos.subtract(this.hero.position);
+    toCamera.y = 0;
+    if (toCamera.lengthSquared() < 0.0001) return;
+
+    const from = this.hero.rotation.y;
+    const to = Math.atan2(toCamera.x, toCamera.z) + WIN_YAW_OFFSET;
+    let delta = to - from;
+    while (delta > Math.PI) delta -= 2 * Math.PI;
+    while (delta < -Math.PI) delta += 2 * Math.PI;
+
+    await this._tween(WIN_TURN_MS, (e) => {
+      this.hero.rotation.y = from + delta * e;
+    });
   }
 
   async _turn(side) {
@@ -559,6 +696,7 @@ class Game {
     await this._tween(TURN_MS, (e) => {
       this.hero.rotation.y = from + delta * e;
     });
+    if (this.onDirChange) this.onDirChange(DIR_ORDER[this.dir]);
   }
 
   async _forward() {
@@ -572,13 +710,12 @@ class Game {
       return { ok: false, reason: "Ой! Это край карты — туда нельзя. 🌊" };
     }
     const ch = this.grid[nr][nc] || ".";
-    // Пират?
     if (ch === "#") {
       await this._bump(v);
       return { ok: false, reason: "Стоп! Впереди пират! ☠️ Нужно его обойти." };
     }
 
-    // Двигаемся
+    // Двигаемся (лава — герой входит и гибнет)
     const fromPos = this.hero.position.clone();
     const toPos = this.cellToWorld(nr, nc, this.gridY - this.heroFeetMinY);
     this._playAnim(this.animWalk);
@@ -590,7 +727,44 @@ class Game {
     this.pos = { row: nr, col: nc };
     this._tryCollect(nr, nc);
 
+    // Лава?
+    if (ch === "L") {
+      return { ok: false, reason: "Лава! 🔥 Сюда нельзя ступать — используй Прыжок!" };
+    }
     // Финиш?
+    if (this.finish && nr === this.finish.row && nc === this.finish.col) {
+      return { ok: true, win: true };
+    }
+    return { ok: true, win: false };
+  }
+
+  async _jump() {
+    const v = DIR_VEC[DIR_ORDER[this.dir]];
+    const nr = this.pos.row + v.dz * 2;
+    const nc = this.pos.col + v.dx * 2;
+
+    if (nr < 0 || nr >= this.rows || nc < 0 || nc >= this.cols) {
+      await this._bump(v);
+      return { ok: false, reason: "Прыжок за край карты! 🌊" };
+    }
+    const landing = this.grid[nr][nc] || ".";
+    if (landing === "#") {
+      await this._bump(v);
+      return { ok: false, reason: "Нельзя приземлиться на пирата! ☠️" };
+    }
+
+    const fromPos = this.hero.position.clone();
+    const toPos = this.cellToWorld(nr, nc, this.gridY - this.heroFeetMinY);
+    this._playAnim(this.animJump || this.animWalk);
+    await this._tween(MOVE_MS * 1.6, (e) => {
+      this.hero.position = BABYLON.Vector3.Lerp(fromPos, toPos, e);
+      this.hero.position.y += Math.sin(e * Math.PI) * CELL * 1.2; // дуга прыжка
+    });
+    this._playAnim(this.animIdle);
+
+    this.pos = { row: nr, col: nc };
+    this._tryCollect(nr, nc);
+
     if (this.finish && nr === this.finish.row && nc === this.finish.col) {
       return { ok: true, win: true };
     }
